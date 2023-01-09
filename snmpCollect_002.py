@@ -169,12 +169,19 @@ snmpMIBS = {
                 'DESCRIPTION' : 'The present number of active alarm conditions.'}
             }
     }
-timedOutSeconds = '5'
-retryCount = '3'
-snmpARG = ['-v', '2c', '-c', 'public', '-OQ', '-t', timedOutSeconds, '-r', retryCount]
-snmpFolder = '/usr/bin/'
-snmpCMD = [snmpFolder + 'snmpget']
-resultFile = './statusUPS.json'
+
+
+resultFile = 'statusUPS.json'
+keepRecords = 1000000000000
+
+def getGlobalString ():
+    timedOutSeconds = '5'
+    retryCount = '3'
+    # snmpFolder = '/usr/bin/'
+    snmpFolder = 'C:\\Users\\16899486_admin\\Desktop\\C830G\\UPS\\Net-SNMP-Install\\bin\\'
+    snmpCMD = [snmpFolder + 'snmpget']
+    snmpARG = ['-v', '2c', '-c', 'public', '-OQ', '-t', timedOutSeconds, '-r', retryCount]
+    return snmpARG, snmpCMD
 
 def secondsTime():
     getHourMinuteSeconds = time.strftime("%Y%b%d_%H%M%S")
@@ -184,27 +191,34 @@ def checkLogFileSize(resultFile):
     if os.path.getsize(resultFile) > 1000:
         return True
 
-def getAlarmState(host):
-    collectValues = [], collectResults = []
+def getAlarmState(host):    
+    collectValues = []
+    collectResults = []
     for eachOIDName in isAlarm:
         getOIDString = snmpMIBS['upsMIB'][eachOIDName]['oidString']
+        snmpARG, snmpCMD = getGlobalString ()
         for str in snmpARG:
             snmpCMD.append(str)
         snmpCMD.append(host.strip())
         snmpCMD.append(getOIDString)
 
+        #print ('getAlarmState' , ' ', snmpCMD)
         querySNMP = Popen( snmpCMD , stdout=PIPE, stderr=PIPE)
         stdout, stderr = querySNMP.communicate()
 
         if len(stdout) > 0: 
+            #print ('getAlarmState' , ' ', stdout)
             snmpValue = stdout.decode('utf-8').split('=')[-1].replace('\n', '').strip()
-            if eval (snmpValue.strip() + snmpMIBS[eachOIDName]['expectValue']):
+            print ('getAlarmState' , ' ', snmpValue, ' ', snmpMIBS['upsMIB'][eachOIDName]['expectValue'])
+            if eval (snmpValue.strip() + snmpMIBS['upsMIB'][eachOIDName]['expectValue']):
                 collectResults.append(1) ## Passed the expectValue
                 collectValues.append(snmpValue.strip())
             else:
                 collectResults.append(0) ## Failed the expectValue
         elif len(stderr) > 0: 
+            #print ('getAlarmState' , ' ', stderr)
             snmpError = stderr.decode('utf-8').split('=')[-1].replace('\n', '').strip()
+            #print ('getAlarmState' , ' ', snmpError)
             if 'No Response from' in snmpError:
                 collectResults.append(0) ## Failed the expectValue
                 collectValues.append(snmpError.strip())
@@ -214,26 +228,33 @@ def getAlarmState(host):
         return ('isNormal')
 
 def getNormalizedState(host):
-    collectValues = [], collectResults = []
+    collectValues = []
+    collectResults = []
     for eachOIDName in isNormalized:
         getOIDString = snmpMIBS['upsMIB'][eachOIDName]['oidString']
+        snmpARG, snmpCMD = getGlobalString ()
         for str in snmpARG:
             snmpCMD.append(str)
         snmpCMD.append(host.strip())
         snmpCMD.append(getOIDString)
 
+        print ('getNormalizedState', ' ', snmpCMD)
         querySNMP = Popen( snmpCMD , stdout=PIPE, stderr=PIPE)
         stdout, stderr = querySNMP.communicate()
 
         if len(stdout) > 0: 
+            print ('getNormalizedState', ' ', stdout)
             snmpValue = stdout.decode('utf-8').split('=')[-1].replace('\n', '').strip()
-            if eval (snmpValue.strip() + snmpMIBS[eachOIDName]['expectValue']):
+            #print ('getNormalizedState', ' ', snmpValue)
+            if eval (snmpValue.strip() + snmpMIBS['upsMIB'][eachOIDName]['expectValue']):
                 collectResults.append(1) ## Passed the expectValue
                 collectValues.append(snmpValue.strip())
             else:
                 collectResults.append(0) ## Failed the expectValue
         elif len(stderr) > 0: 
+            print ('getNormalizedState', ' ', stderr)
             snmpError = stderr.decode('utf-8').split('=')[-1].replace('\n', '').strip()
+            #print ('getNormalizedState', ' ', snmpError)
             if 'No Response from' in snmpError:
                 collectResults.append(0) ## Failed the expectValue
                 collectValues.append(snmpError.strip())
@@ -244,15 +265,20 @@ def getNormalizedState(host):
 
 def isBypass(host):
     getOIDString = checkBypass['upsMIB']['upsOutputSource']['oidString']
+    snmpARG, snmpCMD = getGlobalString ()
     for str in snmpARG:
         snmpCMD.append(str)
     snmpCMD.append(host.strip())
     snmpCMD.append(getOIDString)
+    #print ('isBypass', ' ', snmpCMD)
     querySNMP = Popen( snmpCMD , stdout=PIPE, stderr=PIPE)
+    
     stdout, stderr = querySNMP.communicate()
+    #print ('isBypass', ' ', stdout)
 
     if len(stdout) > 0: 
         snmpValue = stdout.decode('utf-8').split('=')[-1].replace('\n', '').strip()
+        #print ('isBypass', ' ', snmpValue)
         if eval (snmpValue.strip() + checkBypass['upsMIB']['upsOutputSource']['expectValue']):
             return 'isBypass'
         elif eval (snmpValue.strip() + snmpMIBS['upsMIB']['upsOutputSource']['expectValue']):
@@ -286,24 +312,34 @@ def getLocation():
 
 def getJSONfile(hostList, resultFile):
     backupJSON = {}
-    with open(resultFile, 'r') as f:
-        jsonString = json.loads(f.read())
+    if os.path.isfile(resultFile):
+        with open(resultFile, 'r') as f:
+            jsonString = json.loads(f.read())
+            for host in hostList:
+                eachResult = eachHost(host)
+                if host in jsonString:
+                    backupJSON[host] = jsonString[host]
+                    backupJSON[host].append(eachResult)
+                else:
+                    backupJSON[host] = []
+                    backupJSON[host].append(eachResult)            
+                while(len(backupJSON[host]) > keepRecords):
+                    backupJSON[host].pop(0)
+    else:
         for host in hostList:
             eachResult = eachHost(host)
-            if host in jsonString:
-                backupJSON[host] = jsonString[host]
-                backupJSON[host].append(eachResult)
-            else:
-                backupJSON[host] = []
-                backupJSON[host].append(eachResult)            
-            while(len(backupJSON[host]) > 3):
+            backupJSON[host] = []
+            backupJSON[host].append(eachResult)            
+            while(len(backupJSON[host]) > keepRecords):
                 backupJSON[host].pop(0)
     return backupJSON
 
 if __name__ == '__main__':
-    # hostList = ('175.50.44.1', '176.50.44.1')
-    hostList = getLocation()
-    jsonString = getJSONfile(hostList, resultFile)
-    with open(resultFile, 'w') as f:
-        f.writelines(json.dumps(jsonString, indent=4, separators=(", ", " : ")))
+    hostList = ['175.50.44.1']
+    # hostList = getLocation()
+    while True:        
+        jsonString = getJSONfile(hostList, resultFile)
+        with open(resultFile, 'w+') as f:
+            f.writelines(json.dumps(jsonString, indent=4, separators=(", ", " : ")))
+        time.sleep(10)
 
