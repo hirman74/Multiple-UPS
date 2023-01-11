@@ -172,7 +172,7 @@ snmpMIBS = {
 
 
 resultFile = 'statusUPS.json'
-keepRecords = 1000000000000
+keepRecords = 100
 
 def getGlobalString ():
     timedOutSeconds = '5'
