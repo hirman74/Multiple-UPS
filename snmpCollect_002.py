@@ -177,8 +177,7 @@ keepRecords = 100
 def getGlobalString ():
     timedOutSeconds = '5'
     retryCount = '3'
-    # snmpFolder = '/usr/bin/'
-    snmpFolder = 'C:\\Users\\16899486_admin\\Desktop\\C830G\\UPS\\Net-SNMP-Install\\bin\\'
+    snmpFolder = '/usr/bin/'
     snmpCMD = [snmpFolder + 'snmpget']
     snmpARG = ['-v', '2c', '-c', 'public', '-OQ', '-t', timedOutSeconds, '-r', retryCount]
     return snmpARG, snmpCMD
